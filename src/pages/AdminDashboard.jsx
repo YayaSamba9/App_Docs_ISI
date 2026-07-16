@@ -4,6 +4,7 @@ import {
   getStudents, 
   saveStudent, 
   deleteStudent, 
+  deleteMultipleStudents,
   getDepartments, 
   saveDepartments, 
   getCohorts, 
@@ -19,6 +20,7 @@ import { validerMotDePasse, calculerForceMotDePasse, genererMotDePasseTemporaire
 export default function AdminDashboard({ user, currentTab, addToast }) {
   const [analytics, setAnalytics] = useState(null);
   const [students, setStudents] = useState([]);
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [cohorts, setCohorts] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -71,6 +73,12 @@ export default function AdminDashboard({ user, currentTab, addToast }) {
 
   const [createdCredentials, setCreatedCredentials] = useState(null);
 
+  // Import states
+  const [showImportStudentsModal, setShowImportStudentsModal] = useState(false);
+  const [showImportUsersModal, setShowImportUsersModal] = useState(false);
+  const [importLog, setImportLog] = useState('');
+  const [importing, setImporting] = useState(false);
+
   // Settings & password change states
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -112,11 +120,300 @@ export default function AdminDashboard({ user, currentTab, addToast }) {
     setCohorts(getCohorts());
     setAuditLogs(getAuditLogs());
     setUsers(getUsers());
+    setSelectedStudentIds([]); // Clear selection on reload
   };
 
   useEffect(() => {
     loadAdminData();
   }, [currentTab]);
+
+  const downloadStudentTemplate = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Matricule;Prenom;Nom;Sexe;DateNaissance;LieuNaissance;Domaine;Mention;Specialite;Niveau;Departement;Cohorte\r\n"
+      + "24001;Mamadou;Diop;Masculin;2002-05-14;Dakar;Sciences et Technologies;Informatique;Génie Logiciel;Licence;Génie Informatique;Promotion 2024\r\n"
+      + "24002;Awa;Ndiaye;Féminin;2003-08-22;Saint-Louis;Sciences et Technologies;Informatique;Génie Logiciel;Licence;Génie Informatique;Promotion 2024";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "modele_import_etudiants.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadUserTemplate = () => {
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + "NomComplet;Email;Role;MatiereHabilitations\r\n"
+      + "Prof. Ablaye Gaye;ablaye.gaye@groupeisi.sn;prof;Algorithme:Génie Logiciel|Java:Informatique de Gestion\r\n"
+      + "Prof. Amadou Sow;prof@groupeisi.sn;prof;Java avancé:Génie Logiciel|C Sharp:Génie Logiciel\r\n"
+      + "Agent Scolarite;agent@groupeisi.sn;agent;";
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "modele_import_utilisateurs.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportStudents = async (file) => {
+    if (!file) return;
+    setImporting(true);
+    setImportLog('Début de l\'analyse du fichier...\n');
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target.result;
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+        if (lines.length < 2) {
+          setImportLog(prev => prev + 'Erreur : Le fichier est vide ou ne contient pas de données.\n');
+          setImporting(false);
+          return;
+        }
+        
+        const headerLine = lines[0];
+        const separator = headerLine.includes(';') ? ';' : ',';
+        const headers = headerLine.split(separator).map(h => h.trim().replace(/^["']|["']$/g, ''));
+        
+        setImportLog(prev => prev + `Séparateur détecté : "${separator}"\n`);
+        setImportLog(prev => prev + `Colonnes trouvées : ${headers.join(', ')}\n\n`);
+        
+        let successCount = 0;
+        let skipCount = 0;
+        
+        // Load latest state
+        const currentStudents = getStudents();
+        const currentUsers = getUsers();
+        
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          const values = line.split(separator).map(v => v.trim().replace(/^["']|["']$/g, ''));
+          if (values.length < 3) {
+            setImportLog(prev => prev + `Ligne ${i + 1} ignorée (colonnes insuffisantes) : "${line}"\n`);
+            skipCount++;
+            continue;
+          }
+          
+          const row = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+          });
+          
+          const matricule = row.Matricule || row.matricule || values[0];
+          const prenom = row.Prenom || row.prenom || values[1];
+          const nom = row.Nom || row.nom || values[2];
+          
+          if (!matricule || !prenom || !nom) {
+            setImportLog(prev => prev + `Ligne ${i + 1} ignorée (champs obligatoires manquants : Matricule, Prenom, Nom) : ${line}\n`);
+            skipCount++;
+            continue;
+          }
+          
+          // Validate Matricule / studentId is unique
+          if (currentStudents.some(s => s.studentId === matricule)) {
+            setImportLog(prev => prev + `Ligne ${i + 1} ignorée (Numéro Carte / Matricule ${matricule} déjà existant)\n`);
+            skipCount++;
+            continue;
+          }
+          
+          // Generate institutional email automatically (prenom.nom@isidk.sn)
+          const cleanStr = (str) => {
+            return str
+              .toLowerCase()
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "") // remove accents
+              .replace(/[^a-z0-9.-]/g, "") // keep lowercase alphanumeric, dots, hyphens
+              .replace(/\s+/g, ""); // remove spaces
+          };
+          const prenomClean = cleanStr(prenom);
+          const nomClean = cleanStr(nom);
+          let emailBase = `${prenomClean}.${nomClean}`;
+          let generatedEmail = `${emailBase}@isidk.sn`;
+          
+          // Avoid email collision
+          let counter = 1;
+          while (currentUsers.some(u => u.email === generatedEmail) || currentStudents.some(s => s.email === generatedEmail)) {
+            counter++;
+            generatedEmail = `${emailBase}${counter}@isidk.sn`;
+          }
+          
+          const deptName = row.Departement || row.departement || '';
+          const cohortName = row.Cohorte || row.cohorte || '';
+          
+          const matchedDept = departments.find(d => 
+            d.name.toLowerCase().includes(deptName.toLowerCase()) || 
+            d.id.toLowerCase() === deptName.toLowerCase()
+          ) || departments[0];
+          
+          const matchedCohort = cohorts.find(c => 
+            c.name.toLowerCase().includes(cohortName.toLowerCase()) || 
+            c.id.toLowerCase() === cohortName.toLowerCase()
+          ) || cohorts[0];
+          
+          try {
+            await saveStudent({
+              studentId: matricule,
+              firstName: prenom,
+              lastName: nom,
+              email: generatedEmail,
+              departmentId: matchedDept ? matchedDept.id : 'dept-gi',
+              cohortId: matchedCohort ? matchedCohort.id : 'coh-2024',
+              sexe: row.Sexe || row.sexe || 'Masculin',
+              birthDate: row.DateNaissance || row.birthDate || '2000-01-01',
+              birthPlace: row.LieuNaissance || row.birthPlace || 'Dakar',
+              domaine: row.Domaine || row.domaine || 'Sciences et Technologies',
+              mention: row.Mention || row.mention || 'Informatique',
+              specialty: row.Specialite || row.specialty || 'Génie Logiciel',
+              grade: row.Niveau || row.grade || 'Licence',
+              status: 'active',
+              password: 'passer123@'
+            }, user);
+            
+            setImportLog(prev => prev + `✓ Étudiant importé : ${prenom} ${nom} (${matricule}) -> E-mail : ${generatedEmail}\n`);
+            successCount++;
+            
+            // Add to locally tracked list to prevent duplicate emails/matricules in same file
+            currentStudents.push({ studentId: matricule, email: generatedEmail });
+            currentUsers.push({ email: generatedEmail });
+          } catch (err) {
+            setImportLog(prev => prev + `✗ Erreur ligne ${i + 1} : ${err.message}\n`);
+            skipCount++;
+          }
+        }
+        
+        setImportLog(prev => prev + `\n--- RAPPORT FINAL ---\nImportés : ${successCount}\nIgnorés/Erreurs : ${skipCount}\n`);
+        addToast(`${successCount} étudiants importés avec succès !`, 'success');
+        
+        setStudents(getStudents());
+        setAnalytics(getSystemAnalytics());
+      } catch (err) {
+        setImportLog(prev => prev + `Erreur critique de lecture : ${err.message}\n`);
+      } finally {
+        setImporting(false);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportUsers = async (file) => {
+    if (!file) return;
+    setImporting(true);
+    setImportLog('Début de l\'analyse du fichier...\n');
+    
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target.result;
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+        if (lines.length < 2) {
+          setImportLog(prev => prev + 'Erreur : Le fichier est vide ou ne contient pas de données.\n');
+          setImporting(false);
+          return;
+        }
+        
+        const headerLine = lines[0];
+        const separator = headerLine.includes(';') ? ';' : ',';
+        const headers = headerLine.split(separator).map(h => h.trim().replace(/^["']|["']$/g, ''));
+        
+        setImportLog(prev => prev + `Séparateur détecté : "${separator}"\n`);
+        setImportLog(prev => prev + `Colonnes trouvées : ${headers.join(', ')}\n\n`);
+        
+        let successCount = 0;
+        let skipCount = 0;
+        
+        // Load latest state
+        const currentUsers = getUsers();
+        
+        for (let i = 1; i < lines.length; i++) {
+          const line = lines[i];
+          const values = line.split(separator).map(v => v.trim().replace(/^["']|["']$/g, ''));
+          if (values.length < 3) {
+            setImportLog(prev => prev + `Ligne ${i + 1} ignorée (colonnes insuffisantes) : "${line}"\n`);
+            skipCount++;
+            continue;
+          }
+          
+          const row = {};
+          headers.forEach((header, index) => {
+            row[header] = values[index] || '';
+          });
+          
+          const nomComplet = row.NomComplet || row.name || values[0];
+          const email = row.Email || row.email || values[1];
+          const role = (row.Role || row.role || values[2]).toLowerCase();
+          
+          if (!nomComplet || !email || !role) {
+            setImportLog(prev => prev + `Ligne ${i + 1} ignorée (champs obligatoires manquants) : ${line}\n`);
+            skipCount++;
+            continue;
+          }
+          
+          if (!email.endsWith('@isidk.sn') && !email.endsWith('@groupeisi.sn')) {
+            setImportLog(prev => prev + `Ligne ${i + 1} ignorée (domaine e-mail invalide, doit être @isidk.sn ou @groupeisi.sn) : ${email}\n`);
+            skipCount++;
+            continue;
+          }
+          
+          if (role !== 'prof' && role !== 'agent' && role !== 'admin') {
+            setImportLog(prev => prev + `Ligne ${i + 1} ignorée (rôle "${role}" invalide, doit être: prof, agent ou admin) : ${line}\n`);
+            skipCount++;
+            continue;
+          }
+          
+          if (currentUsers.some(u => u.email === email)) {
+            setImportLog(prev => prev + `Ligne ${i + 1} ignorée (E-mail ${email} déjà existant)\n`);
+            skipCount++;
+            continue;
+          }
+          
+          const habsRaw = row.MatiereHabilitations || row.habilitations || values[3] || '';
+          const matieres = [];
+          if (role === 'prof' && habsRaw) {
+            const pairs = habsRaw.split('|');
+            pairs.forEach(pair => {
+              const parts = pair.split(':');
+              if (parts.length === 2 && parts[0].trim() && parts[1].trim()) {
+                matieres.push({
+                  subject: parts[0].trim(),
+                  specialty: parts[1].trim()
+                });
+              }
+            });
+          }
+          
+          try {
+            await saveUser({
+              name: nomComplet,
+              email: email,
+              role: role,
+              matieres: matieres,
+              password: 'passer123@'
+            }, user);
+            
+            setImportLog(prev => prev + `✓ Utilisateur importé : ${nomComplet} (${email}, Rôle: ${role})\n`);
+            successCount++;
+            
+            currentUsers.push({ email });
+          } catch (err) {
+            setImportLog(prev => prev + `✗ Erreur ligne ${i + 1} : ${err.message}\n`);
+            skipCount++;
+          }
+        }
+        
+        setImportLog(prev => prev + `\n--- RAPPORT FINAL ---\nImportés : ${successCount}\nIgnorés/Erreurs : ${skipCount}\n`);
+        addToast(`${successCount} utilisateurs importés avec succès !`, 'success');
+        
+        setUsers(getUsers());
+        setAnalytics(getSystemAnalytics());
+      } catch (err) {
+        setImportLog(prev => prev + `Erreur critique de lecture : ${err.message}\n`);
+      } finally {
+        setImporting(false);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // Student CRUD operations
   const handleOpenCreateStudent = () => {
@@ -234,6 +531,34 @@ export default function AdminDashboard({ user, currentTab, addToast }) {
       deleteStudent(sId, user);
       addToast('Compte étudiant supprimé.', 'success');
       loadAdminData();
+    }
+  };
+
+  const handleSelectStudent = (id) => {
+    setSelectedStudentIds(prev => 
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllStudents = (e) => {
+    if (e.target.checked) {
+      setSelectedStudentIds(students.map(s => s.id));
+    } else {
+      setSelectedStudentIds([]);
+    }
+  };
+
+  const handleBulkDeleteStudents = () => {
+    if (selectedStudentIds.length === 0) return;
+    const confirmMsg = `Êtes-vous sûr de vouloir supprimer ces ${selectedStudentIds.length} étudiants sélectionnés ? Cette action supprimera également leurs fiches et leurs comptes d'accès de manière définitive.`;
+    if (window.confirm(confirmMsg)) {
+      const res = deleteMultipleStudents(selectedStudentIds, user);
+      if (res.success) {
+        addToast(`${res.count} étudiants supprimés avec succès.`, 'success');
+        loadAdminData();
+      } else {
+        addToast('Une erreur est survenue lors de la suppression groupée.', 'error');
+      }
     }
   };
 
@@ -634,7 +959,15 @@ export default function AdminDashboard({ user, currentTab, addToast }) {
       {/* 2. Student Management CRUD */}
       {currentTab === 'students' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', alignItems: 'center' }}>
+            {selectedStudentIds.length > 0 && (
+              <button onClick={handleBulkDeleteStudents} className="btn btn-danger" style={{ marginRight: 'auto' }}>
+                🗑️ Supprimer la sélection ({selectedStudentIds.length})
+              </button>
+            )}
+            <button onClick={() => { setImportLog(''); setShowImportStudentsModal(true); }} className="btn btn-secondary">
+              📂 Importer Étudiants (CSV)
+            </button>
             <button onClick={handleOpenCreateStudent} className="btn btn-primary">
               + Créer Fiche Étudiant
             </button>
@@ -646,6 +979,14 @@ export default function AdminDashboard({ user, currentTab, addToast }) {
               <table>
                 <thead>
                   <tr>
+                    <th style={{ width: '40px', paddingLeft: '20px' }}>
+                      <input 
+                        type="checkbox" 
+                        onChange={handleSelectAllStudents} 
+                        checked={selectedStudentIds.length === students.length && students.length > 0} 
+                        style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
+                      />
+                    </th>
                     <th>N° Carte</th>
                     <th>Nom Complet</th>
                     <th>E-mail</th>
@@ -658,6 +999,14 @@ export default function AdminDashboard({ user, currentTab, addToast }) {
                 <tbody>
                   {students.map(s => (
                     <tr key={s.id}>
+                      <td style={{ paddingLeft: '20px' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedStudentIds.includes(s.id)} 
+                          onChange={() => handleSelectStudent(s.id)} 
+                          style={{ cursor: 'pointer', transform: 'scale(1.1)' }}
+                        />
+                      </td>
                       <td style={{ fontWeight: '750' }}>{s.studentId}</td>
                       <td style={{ fontWeight: '500' }}>{s.lastName} {s.firstName}</td>
                       <td>{s.email}</td>
@@ -794,7 +1143,10 @@ export default function AdminDashboard({ user, currentTab, addToast }) {
       {/* 3.5 User Accounts Tab */}
       {currentTab === 'users' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <button onClick={() => { setImportLog(''); setShowImportUsersModal(true); }} className="btn btn-secondary">
+              📂 Importer Enseignants & Scolarité (CSV)
+            </button>
             <button onClick={handleOpenCreateUser} className="btn btn-primary">
               + Créer un Compte
             </button>
@@ -1588,6 +1940,162 @@ export default function AdminDashboard({ user, currentTab, addToast }) {
                 style={{ flex: 1 }}
               >
                 Compris
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Student Bulk Import Modal */}
+      {showImportStudentsModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '600px', width: '95%' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Importation de Fiches Étudiants (CSV)</h3>
+              <button 
+                onClick={() => { setShowImportStudentsModal(false); setImportLog(''); }} 
+                className="modal-close"
+                disabled={importing}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                Importez un fichier CSV contenant la liste des fiches étudiants à inscrire. L'adresse e-mail institutionnelle (sous la forme <code>prenom.nom@isidk.sn</code>) et le mot de passe par défaut (<code>passer123@</code>) seront <strong>générés automatiquement</strong> par le système.
+              </p>
+              
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                <button 
+                  onClick={downloadStudentTemplate} 
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                >
+                  📥 Télécharger le modèle (CSV)
+                </button>
+              </div>
+
+              <div className="form-group">
+                <label>Sélectionner le fichier CSV</label>
+                <input 
+                  type="file" 
+                  accept=".csv,text/csv" 
+                  className="form-control"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      handleImportStudents(file);
+                    }
+                  }}
+                />
+              </div>
+
+              {importLog && (
+                <div className="form-group" style={{ marginTop: '16px' }}>
+                  <label>Rapport d'analyse et importation :</label>
+                  <textarea
+                    className="form-control"
+                    style={{ 
+                      height: '220px', 
+                      fontFamily: 'monospace', 
+                      fontSize: '0.78rem', 
+                      backgroundColor: '#f8fafc',
+                      color: '#0f172a',
+                      lineHeight: '1.4'
+                    }}
+                    readOnly
+                    value={importLog}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button 
+                onClick={() => { setShowImportStudentsModal(false); setImportLog(''); }} 
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+                disabled={importing}
+              >
+                {importing ? 'Importation en cours...' : 'Fermer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* User Accounts Bulk Import Modal */}
+      {showImportUsersModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '600px', width: '95%' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Importation de Comptes Utilisateurs (CSV)</h3>
+              <button 
+                onClick={() => { setShowImportUsersModal(false); setImportLog(''); }} 
+                className="modal-close"
+                disabled={importing}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                Importez un fichier CSV contenant la liste des professeurs ou agents de scolarité à inscrire. Le mot de passe par défaut sera configuré à <code>passer123@</code>.
+              </p>
+              
+              <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                <button 
+                  onClick={downloadUserTemplate} 
+                  className="btn btn-secondary btn-sm"
+                  type="button"
+                >
+                  📥 Télécharger le modèle (CSV)
+                </button>
+              </div>
+
+              <div className="form-group">
+                <label>Sélectionner le fichier CSV</label>
+                <input 
+                  type="file" 
+                  accept=".csv,text/csv" 
+                  className="form-control"
+                  disabled={importing}
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      handleImportUsers(file);
+                    }
+                  }}
+                />
+              </div>
+
+              {importLog && (
+                <div className="form-group" style={{ marginTop: '16px' }}>
+                  <label>Rapport d'analyse et importation :</label>
+                  <textarea
+                    className="form-control"
+                    style={{ 
+                      height: '220px', 
+                      fontFamily: 'monospace', 
+                      fontSize: '0.78rem', 
+                      backgroundColor: '#f8fafc',
+                      color: '#0f172a',
+                      lineHeight: '1.4'
+                    }}
+                    readOnly
+                    value={importLog}
+                  />
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button 
+                onClick={() => { setShowImportUsersModal(false); setImportLog(''); }} 
+                className="btn btn-primary"
+                style={{ width: '100%' }}
+                disabled={importing}
+              >
+                {importing ? 'Importation en cours...' : 'Fermer'}
               </button>
             </div>
           </div>

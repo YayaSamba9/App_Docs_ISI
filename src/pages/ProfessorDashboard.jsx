@@ -71,7 +71,7 @@ export default function ProfessorDashboard({ user, currentTab, addToast }) {
 
   const getStrengthColor = () => {
     switch (strength) {
-      case 'fort': return '#0e294b';
+      case 'fort': return '#004498';
       case 'moyen': return '#2563eb';
       default: return '#94a3b8';
     }

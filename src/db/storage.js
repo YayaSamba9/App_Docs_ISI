@@ -445,6 +445,40 @@ export const deleteStudent = (id, adminUser) => {
   );
 };
 
+export const deleteMultipleStudents = (ids, adminUser) => {
+  if (!Array.isArray(ids) || ids.length === 0) return { success: false, count: 0 };
+  
+  const students = loadData(STORAGE_KEYS.STUDENTS, MOCK_STUDENTS);
+  const users = loadData(STORAGE_KEYS.USERS, MOCK_USERS);
+  
+  const userIdsToDelete = [];
+  let deletedCount = 0;
+  
+  const filteredStudents = students.filter(s => {
+    if (ids.includes(s.id)) {
+      userIdsToDelete.push(s.userId);
+      deletedCount++;
+      return false;
+    }
+    return true;
+  });
+  
+  const filteredUsers = users.filter(u => !userIdsToDelete.includes(u.id));
+  
+  saveData(STORAGE_KEYS.STUDENTS, filteredStudents);
+  saveData(STORAGE_KEYS.USERS, filteredUsers);
+  
+  logAuditAction(
+    adminUser.id,
+    adminUser.name,
+    adminUser.role,
+    'DELETE_MULTIPLE_STUDENTS',
+    `Suppression groupée de ${deletedCount} étudiants`
+  );
+  
+  return { success: true, count: deletedCount };
+};
+
 // Requests API
 export const getRequests = () => {
   const requests = loadData(STORAGE_KEYS.REQUESTS, MOCK_REQUESTS);
@@ -877,5 +911,26 @@ export const deleteUser = (userId, adminUser) => {
     `Suppression de l'utilisateur ${user.name} (${user.email})`
   );
   return { success: true };
+};
+
+export const updateUserProfilePicture = (userId, photoDataUrl) => {
+  const users = loadData(STORAGE_KEYS.USERS, MOCK_USERS);
+  const idx = users.findIndex(u => u.id === userId);
+  if (idx === -1) {
+    return { success: false, message: "Utilisateur non trouvé." };
+  }
+  
+  users[idx].photo = photoDataUrl;
+  saveData(STORAGE_KEYS.USERS, users);
+  
+  logAuditAction(
+    userId,
+    users[idx].name || `${users[idx].prenom} ${users[idx].nom}`,
+    users[idx].role,
+    'UPDATE_PROFILE_PICTURE',
+    "Mise à jour de la photo de profil"
+  );
+  
+  return { success: true, user: users[idx] };
 };
 

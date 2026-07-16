@@ -283,7 +283,7 @@ export default function DocumentViewer({ request, student, onClose }) {
                 )}
                 
                 <div style={{ ...metaListStyle, marginTop: '12px' }}>
-                  <div style={metaItemStyle}><span style={metaLabelStyle}>Année académique :</span> <span style={metaValueStyle}>{student.cohortName.replace('Année académique ', '')}</span></div>
+                  <div style={metaItemStyle}><span style={metaLabelStyle}>Année académique :</span> <span style={metaValueStyle}>{(student.cohortName || '').replace('Année académique ', '') || 'N/A'}</span></div>
                   <div style={metaItemStyle}><span style={metaLabelStyle}>Matricule :</span> <span style={metaValueStyle}>{student.studentId}</span></div>
                   <div style={metaItemStyle}><span style={metaLabelStyle}>Prénom et nom :</span> <span style={metaValueStyle}>{student.firstName} {student.lastName}</span></div>
                   <div style={metaItemStyle}><span style={metaLabelStyle}>Sexe :</span> <span style={metaValueStyle}>{student.sexe || 'Masculin'}</span></div>

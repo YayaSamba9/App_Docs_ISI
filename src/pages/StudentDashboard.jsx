@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { getRequests, submitRequest, getGradesByStudent, calculateAcademicSummary, updateUserPassword } from '../db/storage';
+import { getRequests, submitRequest, getGradesByStudent, calculateAcademicSummary, updateUserPassword, getStudents } from '../db/storage';
 import StatsCard from '../components/StatsCard';
 import DocumentViewer from '../components/DocumentViewer';
 import { validerMotDePasse, calculerForceMotDePasse } from '../utils/security';
 
 export default function StudentDashboard({ user, currentTab, setCurrentTab, addToast }) {
-  const student = user.studentInfo;
+  const rawStudent = user.studentInfo;
+  const student = rawStudent 
+    ? getStudents().find(s => s.id === rawStudent.id) || rawStudent 
+    : null;
   
   const [requests, setRequests] = useState([]);
   const [grades, setGrades] = useState([]);
@@ -97,10 +100,10 @@ export default function StudentDashboard({ user, currentTab, setCurrentTab, addT
       return;
     }
     
-    // Check if justificatif is required
-    const isJustificatifRequired = docType === 'transcript' || docType === 'report_card';
+    // Check if justificatif is required (only for grade claim/reclamation)
+    const isJustificatifRequired = docType === 'reclamation';
     if (isJustificatifRequired && !justificatif) {
-      addToast('Une pièce justificative (PDF, PNG, JPG) est obligatoire pour cette demande.', 'error');
+      addToast('Une pièce justificative (PDF, PNG, JPG) est obligatoire pour cette réclamation.', 'error');
       return;
     }
     
@@ -164,6 +167,7 @@ export default function StudentDashboard({ user, currentTab, setCurrentTab, addT
       case 'transcript': return 'Relevé de notes';
       case 'internship_certificate': return 'Attestation de stage';
       case 'report_card': return 'Bulletin des notes';
+      case 'reclamation': return 'Réclamation de note';
       default: return type;
     }
   };
@@ -434,7 +438,7 @@ export default function StudentDashboard({ user, currentTab, setCurrentTab, addT
                             >
                               👁️ Détails
                             </button>
-                            {(r.status === 'approved' || r.status === 'delivered') && (
+                            {(r.status === 'approved' || r.status === 'delivered') && r.documentType !== 'reclamation' && (
                               <button 
                                 onClick={() => setPreviewRequest(r)} 
                                 className="btn btn-success btn-sm"
@@ -715,44 +719,45 @@ export default function StudentDashboard({ user, currentTab, setCurrentTab, addT
                     <option value="transcript">Relevé de notes global</option>
                     <option value="report_card">Bulletin des notes semestriel</option>
                     <option value="internship_certificate">Attestation de validation de stage</option>
+                    <option value="reclamation">Réclamation de note</option>
                   </select>
                 </div>
 
-                {/* Pièce justificative upload field */}
-                <div className="form-group">
-                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Pièce justificative (PDF, PNG, JPG)</span>
-                    {(docType === 'transcript' || docType === 'report_card') && (
+                {/* Pièce justificative upload field (Uniquement pour les réclamations de notes) */}
+                {docType === 'reclamation' && (
+                  <div className="form-group">
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Pièce justificative (PDF, PNG, JPG)</span>
                       <span style={{ color: 'var(--status-rejected)', fontSize: '0.72rem', fontWeight: 'bold' }}>* Requis</span>
-                    )}
-                  </label>
-                  <input
-                    type="file"
-                    className="form-control"
-                    accept="application/pdf, image/png, image/jpeg, image/gif"
-                    onChange={(e) => {
-                      const file = e.target.files[0];
-                      if (file) {
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setJustificatif({
-                            name: file.name,
-                            type: file.type,
-                            size: file.size,
-                            data: reader.result
-                          });
-                        };
-                        reader.readAsDataURL(file);
-                      } else {
-                        setJustificatif(null);
-                      }
-                    }}
-                    required={docType === 'transcript' || docType === 'report_card'}
-                  />
-                  <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-light)', fontSize: '0.72rem' }}>
-                    Requis obligatoirement pour la délivrance d'un bulletin semestriel ou d'un relevé de notes global.
-                  </small>
-                </div>
+                    </label>
+                    <input
+                      type="file"
+                      className="form-control"
+                      accept="application/pdf, image/png, image/jpeg, image/gif"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setJustificatif({
+                              name: file.name,
+                              type: file.type,
+                              size: file.size,
+                              data: reader.result
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        } else {
+                          setJustificatif(null);
+                        }
+                      }}
+                      required
+                    />
+                    <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-light)', fontSize: '0.72rem' }}>
+                      Veuillez téléverser une copie de l'évaluation ou tout justificatif appuyant votre réclamation.
+                    </small>
+                  </div>
+                )}
 
                 <div className="form-group">
                   <label>Motif de la demande (Obligatoire)</label>

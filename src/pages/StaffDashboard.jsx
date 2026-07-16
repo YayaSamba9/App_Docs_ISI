@@ -115,6 +115,7 @@ export default function StaffDashboard({ user, currentTab, addToast }) {
       case 'transcript': return 'Relevé de notes';
       case 'internship_certificate': return 'Attestation de stage';
       case 'report_card': return 'Bulletin des notes';
+      case 'reclamation': return 'Réclamation de note';
       default: return type;
     }
   };
@@ -278,7 +279,7 @@ export default function StaffDashboard({ user, currentTab, addToast }) {
                           <button onClick={() => setActiveRequest(r)} className="btn btn-secondary btn-sm" title="Traiter la demande">
                             Traiter
                           </button>
-                          {(r.status === 'approved' || r.status === 'delivered') && (
+                          {(r.status === 'approved' || r.status === 'delivered') && r.documentType !== 'reclamation' && (
                             <button onClick={() => {
                               const std = students.find(s => s.id === r.studentId);
                               setPreviewRequest({ request: r, student: std });
