@@ -167,27 +167,27 @@ export default function Login({ onLoginSuccess }) {
               
               <button 
                 type="button" 
-                onClick={() => handleQuickLogin('agent@groupeisi.sn', 'passer123@')} 
+                onClick={() => handleQuickLogin('agent@groupeisi.sn', 'Secr123@')} 
                 style={quickBtnStyles}
                 disabled={loading}
               >
                 <strong>Scolarité (Gassama)</strong>
                 <span>agent@groupeisi.sn</span>
-                <span>pass: passer123@</span>
+                <span>pass: Secr123@</span>
               </button>
 
               <button 
                 type="button" 
-                onClick={() => handleQuickLogin('prof@groupeisi.sn', 'Prof123@')} 
+                onClick={() => handleQuickLogin('prof@groupeisi.sn', 'Golmy123@')} 
                 style={quickBtnStyles}
                 disabled={loading}
               >
                 <strong>Prof. Sow (GL)</strong>
                 <span>prof@groupeisi.sn</span>
-                <span>pass: Prof123@</span>
+                <span>pass: Golmy123@</span>
               </button>
 
-              <button 
+              {/* <button 
                 type="button" 
                 onClick={() => handleQuickLogin('ablaye.gaye@groupeisi.sn', 'Prof123@')} 
                 style={quickBtnStyles}
@@ -196,17 +196,17 @@ export default function Login({ onLoginSuccess }) {
                 <strong>Prof. Gaye (GL/IAGE)</strong>
                 <span>ablaye.gaye@groupeisi.sn</span>
                 <span>pass: Prof123@</span>
-              </button>
+              </button> */}
 
               <button 
                 type="button" 
-                onClick={() => handleQuickLogin('etudiant@isidk.sn', 'Prof123@')} 
+                onClick={() => handleQuickLogin('cisse2.abdou@isidk.sn', 'Abdou123@')} 
                 style={quickBtnStyles}
                 disabled={loading}
               >
                 <strong>Étudiant (Coulibaly)</strong>
                 <span>etudiant@isidk.sn</span>
-                <span>pass: Etudiant123@</span>
+                <span>pass: Abdou123@</span>
               </button>
             </div>
             

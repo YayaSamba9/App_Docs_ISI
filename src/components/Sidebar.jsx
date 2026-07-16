@@ -114,10 +114,27 @@ export default function Sidebar({ user, currentTab, setCurrentTab, collapsed, se
     }
   };
 
+  const handleLogoClick = () => {
+    if (user.role === 'prof') {
+      setCurrentTab('grades');
+    } else {
+      setCurrentTab('dashboard');
+    }
+  };
+
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`} style={sidebarStyles}>
       {/* Institution Logo & Title */}
-      <div style={{ ...logoContainerStyles, justifyContent: 'center' }}>
+      <div 
+        onClick={handleLogoClick}
+        className="logo-clickable"
+        style={{ 
+          ...logoContainerStyles, 
+          justifyContent: 'center',
+          cursor: 'pointer',
+        }}
+        title="Aller au Tableau de Bord"
+      >
         {collapsed ? (
           <div style={logoIconStyles}>ISI</div>
         ) : (
@@ -134,17 +151,14 @@ export default function Sidebar({ user, currentTab, setCurrentTab, collapsed, se
           <button
             key={link.id}
             onClick={() => setCurrentTab(link.id)}
+            className={`sidebar-menu-btn ${currentTab === link.id ? 'active' : ''}`}
             style={{
-              ...navLinkStyles,
-              backgroundColor: currentTab === link.id ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
-              color: currentTab === link.id ? '#60a5fa' : '#cbd5e1',
-              fontWeight: currentTab === link.id ? '600' : '400',
               justifyContent: collapsed ? 'center' : 'flex-start',
               padding: collapsed ? '12px 0' : '12px 20px',
             }}
             title={collapsed ? link.name : ''}
           >
-            <span style={{ color: currentTab === link.id ? '#3b82f6' : '#94a3b8' }}>
+            <span className="sidebar-menu-icon" style={{ display: 'flex', alignItems: 'center' }}>
               {link.icon}
             </span>
             {!collapsed && <span style={{ marginLeft: '12px' }}>{link.name}</span>}
@@ -152,14 +166,23 @@ export default function Sidebar({ user, currentTab, setCurrentTab, collapsed, se
         ))}
       </nav>
 
-      {/* Collapsed Toggle Button */}
-      <div style={footerStyles}>
-        {!collapsed && (
-          <div style={userInfoStyles}>
-            <div style={userNameStyles}>{user.name}</div>
-            <div style={userRoleStyles}>{handleRoleName(user.role)}</div>
-          </div>
-        )}
+      {/* Collapsed Toggle Button & User Profile picture */}
+      <div style={{ ...footerStyles, flexDirection: collapsed ? 'column' : 'row', gap: collapsed ? '14px' : '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: collapsed ? 'auto' : 'calc(100% - 40px)' }}>
+          {user.photo ? (
+            <img src={user.photo} style={avatarStyles} alt="Profile" />
+          ) : (
+            <div style={initialsAvatarStyles}>
+              {((user.prenom && user.nom) ? `${user.prenom[0]}${user.nom[0]}` : (user.name ? user.name.substring(0,2) : 'U')).toUpperCase()}
+            </div>
+          )}
+          {!collapsed && (
+            <div style={userInfoStyles}>
+              <div style={userNameStyles}>{user.name}</div>
+              <div style={userRoleStyles}>{handleRoleName(user.role)}</div>
+            </div>
+          )}
+        </div>
         <button 
           onClick={() => setCollapsed(!collapsed)} 
           style={collapseBtnStyles}
@@ -177,7 +200,7 @@ export default function Sidebar({ user, currentTab, setCurrentTab, collapsed, se
 // Inline Styles for structural controls to prevent CSS load race issues
 const sidebarStyles = {
   width: 'var(--sidebar-width)',
-  backgroundColor: '#0f172a',
+  background: 'linear-gradient(180deg, var(--primary) 0%, var(--primary-dark) 100%)',
   color: 'white',
   height: '100vh',
   position: 'fixed',
@@ -187,7 +210,7 @@ const sidebarStyles = {
   flexDirection: 'column',
   zIndex: 100,
   transition: 'var(--transition)',
-  borderRight: '1px solid #1e293b',
+  borderRight: '1px solid rgba(255, 255, 255, 0.06)',
 };
 
 // Collapsed helper styles (will override standard width if state is set)
@@ -196,7 +219,7 @@ const logoContainerStyles = {
   display: 'flex',
   alignItems: 'center',
   padding: '0 20px',
-  borderBottom: '1px solid #1e293b',
+  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
   gap: '12px',
   overflow: 'hidden',
 };
@@ -205,8 +228,8 @@ const logoIconStyles = {
   width: '36px',
   height: '36px',
   borderRadius: '8px',
-  backgroundColor: '#2563eb',
-  color: 'white',
+  backgroundColor: '#ffffff',
+  color: '#00007a',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -255,7 +278,7 @@ const navLinkStyles = {
 
 const footerStyles = {
   padding: '16px',
-  borderTop: '1px solid #1e293b',
+  borderTop: '1px solid rgba(255, 255, 255, 0.06)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
@@ -283,6 +306,30 @@ const userRoleStyles = {
   color: '#94a3b8',
 };
 
+const avatarStyles = {
+  width: '38px',
+  height: '38px',
+  borderRadius: '50%',
+  objectFit: 'cover',
+  border: '2px solid rgba(255, 255, 255, 0.2)',
+  flexShrink: 0,
+};
+
+const initialsAvatarStyles = {
+  width: '38px',
+  height: '38px',
+  borderRadius: '50%',
+  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+  color: '#ffffff',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontWeight: '700',
+  fontSize: '0.85rem',
+  border: '2px solid rgba(255, 255, 255, 0.2)',
+  flexShrink: 0,
+};
+
 const collapseBtnStyles = {
   background: 'none',
   border: 'none',
@@ -293,6 +340,6 @@ const collapseBtnStyles = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: '#1e293b',
+  backgroundColor: 'rgba(255, 255, 255, 0.08)',
   flexShrink: 0,
 };

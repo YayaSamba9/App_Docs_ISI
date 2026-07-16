@@ -9,7 +9,7 @@
 
 ### 1. Espace Étudiant
 *   **Tableau des Demandes & Pagination** : Interface sous forme de tableau interactif, filtrable et paginé (Année scolaire, Type de demande, Date, État, Actions) avec recherche textuelle.
-*   **Soumission par Modal & Justificatif obligatoire** : Bouton « Nouvelle demande » ouvrant un formulaire modal. Le dépôt d'une pièce justificative (PDF, PNG, JPG) est strictement obligatoire pour les relevés de notes globaux et bulletins semestriels.
+*   **Soumission par Modal & Justificatif de Réclamation** : Bouton « Nouvelle demande » ouvrant un formulaire modal. Le dépôt d'une pièce justificative (PDF, PNG, JPG) est requis de manière strictement obligatoire **uniquement** pour les demandes de **Réclamation de note** (grade claims). Pour les autres demandes (Bulletins, Attestations), aucun justificatif n'est affiché ni demandé.
 *   **Suivi de Demandes en Temps Réel** : Ligne du temps d'instruction (timeline) accessible via le bouton « Détails » retraçant chaque étape (Soumise → En cours → Approuvée/Rejetée → Délivrée) avec les remarques écrites des agents de la scolarité.
 *   **Téléchargement Officiel** : Génération de documents au format **PDF** intégrant le logo de l'institut, signatures numériques, tampons officiels et codes QR de certification.
 
